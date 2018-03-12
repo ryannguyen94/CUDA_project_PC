@@ -1,4 +1,4 @@
-The code for this project is created based on the donkeycar open-source project.
+The code for this project is created based on the donkeycar open-source library.
 https://github.com/wroscoe/donkey/
 
 This repo includes the code that lives on the PC to train the data using a 2D CNN model, 
