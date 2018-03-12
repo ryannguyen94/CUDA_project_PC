@@ -1,6 +1,8 @@
 The code project is created based on the donkeycar open-source project.
 https://github.com/wroscoe/donkey/
 
+This repo includes the code that lives on the PC to training data, product the model and sync it back to the car. The code for the raspberry pi on the car can be found on this repo: https://github.com/ryannguyen94/CUDA_project
+
 Things that are modified/added to fit our design:
   The machine learning algoritm:
     2D convolution neural network layer structure
