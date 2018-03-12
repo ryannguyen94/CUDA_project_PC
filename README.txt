@@ -10,3 +10,12 @@ Things that are modified/added to fit our design:
   - The machine learning algoritm:
       . 2D convolution neural network layer structure
       . The batch size
+
+manage.py is the main script that can be used to run training, manual driving, or autopilot driving.
+Because this code lives on the pi, to drive the car, run:
+python manage.py drive
+
+To drive the car using a trained model, run:
+python manage.py drive --model <path to the model>
+
+Open up <pi IP address>:8887 in a web browser to either manually control the car or enable autopilot.
