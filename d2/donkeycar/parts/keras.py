@@ -83,9 +83,9 @@ class KerasCategorical(KerasPilot):
         #angle_certainty = max(angle_binned[0])
         angle_unbinned = dk.utils.linear_unbin(angle_binned)
         return angle_unbinned, throttle[0][0]
-    
-    
-    
+
+
+
 class KerasLinear(KerasPilot):
     def __init__(self, model=None, num_outputs=None, *args, **kwargs):
         super(KerasLinear, self).__init__(*args, **kwargs)
@@ -102,47 +102,6 @@ class KerasLinear(KerasPilot):
         steering = outputs[0]
         throttle = outputs[1]
         return steering[0][0], throttle[0][0]
-
-
-
-class KerasIMU(KerasPilot):
-    '''
-    A Keras part that take an image and IMU vector as input,
-    outputs steering and throttle
-
-    Note: When training, you will need to vectorize the input from the IMU.
-    Depending on the names you use for imu records, something like this will work:
-
-    X_keys = ['cam/image_array','imu_array']
-    y_keys = ['user/angle', 'user/throttle']
-    
-    def rt(rec):
-        rec['imu_array'] = np.array([ rec['imu/acl_x'], rec['imu/acl_y'], rec['imu/acl_z'],
-            rec['imu/gyr_x'], rec['imu/gyr_y'], rec['imu/gyr_z'], rec['imu/temp'] ])
-        return rec
-
-    kl = KerasIMU()
-
-    tubgroup = TubGroup(tub_names)
-    train_gen, val_gen = tubgroup.get_train_val_gen(X_keys, y_keys, record_transform=rt,
-                                                    batch_size=cfg.BATCH_SIZE,
-                                                    train_frac=cfg.TRAIN_TEST_SPLIT)
-
-    '''
-    def __init__(self, model=None, num_outputs=2, num_imu_inputs=7 , *args, **kwargs):
-        super(KerasIMU, self).__init__(*args, **kwargs)
-        self.num_imu_inputs = num_imu_inputs
-        self.model = default_imu(num_outputs = num_outputs, num_imu_inputs = num_imu_inputs)
-        
-    def run(self, img_arr, accel_x, accel_y, accel_z, gyr_x, gyr_y, gyr_z, temp):
-        #TODO: would be nice to take a vector input array.
-        img_arr = img_arr.reshape((1,) + img_arr.shape)
-        imu_arr = np.array([accel_x, accel_y, accel_z, gyr_x, gyr_y, gyr_z, temp]).reshape(1,self.num_imu_inputs)
-        outputs = self.model.predict([img_arr, imu_arr])
-        steering = outputs[0]
-        throttle = outputs[1]
-        return steering[0][0], throttle[0][0]
-
 
 
 def default_categorical():
@@ -187,7 +146,7 @@ def default_linear():
     from keras.models import Model
     from keras.layers import Convolution2D, MaxPooling2D, Reshape, BatchNormalization
     from keras.layers import Activation, Dropout, Flatten, Dense
-    
+
     img_in = Input(shape=(120,160,3), name='img_in')
     x = img_in
     x = Convolution2D(24, (6,6), strides=(2,2), activation='relu')(x)
@@ -195,7 +154,7 @@ def default_linear():
     x = Convolution2D(64, (6,6), strides=(2,2), activation='relu')(x)
     x = Convolution2D(64, (3,3), strides=(2,2), activation='relu')(x)
     x = Convolution2D(64, (3,3), strides=(1,1), activation='relu')(x)
-    
+
     x = Flatten(name='flattened')(x)
     x = Dense(100, activation='linear')(x)
     x = Dropout(.1)(x)
@@ -203,104 +162,16 @@ def default_linear():
     x = Dropout(.1)(x)
     #categorical output of the angle
     angle_out = Dense(1, activation='linear', name='angle_out')(x)
-    
+
     #continous output of throttle
     throttle_out = Dense(1, activation='linear', name='throttle_out')(x)
-    
+
     model = Model(inputs=[img_in], outputs=[angle_out, throttle_out])
-    
-    
+
+
     model.compile(optimizer='adam',
-                  loss={'angle_out': 'mean_squared_error', 
+                  loss={'angle_out': 'mean_squared_error',
                         'throttle_out': 'mean_squared_error'},
                   loss_weights={'angle_out': 0.5, 'throttle_out': .5})
 
-    return model
-
-
-
-def default_n_linear(num_outputs):
-    from keras.layers import Input, Dense, merge
-    from keras.models import Model
-    from keras.layers import Convolution2D, MaxPooling2D, Reshape, BatchNormalization
-    from keras.layers import Activation, Dropout, Flatten, Cropping2D, Lambda
-    
-    img_in = Input(shape=(120,160,3), name='img_in')
-    x = img_in
-    x = Cropping2D(cropping=((60,0), (0,0)))(x) #trim 60 pixels off top
-    x = Lambda(lambda x: x/127.5 - 1.)(x) # normalize and re-center
-    x = Convolution2D(24, (5,5), strides=(2,2), activation='relu')(x)
-    x = Convolution2D(32, (5,5), strides=(2,2), activation='relu')(x)
-    x = Convolution2D(64, (5,5), strides=(1,1), activation='relu')(x)
-    x = Convolution2D(64, (3,3), strides=(1,1), activation='relu')(x)
-    x = Convolution2D(64, (3,3), strides=(1,1), activation='relu')(x)
-    
-    x = Flatten(name='flattened')(x)
-    x = Dense(100, activation='relu')(x)
-    x = Dropout(.1)(x)
-    x = Dense(50, activation='relu')(x)
-    x = Dropout(.1)(x)
-
-    outputs = [] 
-    
-    for i in range(num_outputs):
-        outputs.append(Dense(1, activation='linear', name='n_outputs' + str(i))(x))
-        
-    model = Model(inputs=[img_in], outputs=outputs)
-    
-    
-    model.compile(optimizer='adam',
-                  loss='mse')
-
-    return model
-
-
-
-def default_imu(num_outputs, num_imu_inputs):
-    '''
-    Notes: this model depends on concatenate which failed on keras < 2.0.8
-    '''
-
-    from keras.layers import Input, Dense
-    from keras.models import Model
-    from keras.layers import Convolution2D, MaxPooling2D, Reshape, BatchNormalization
-    from keras.layers import Activation, Dropout, Flatten, Cropping2D, Lambda
-    from keras.layers.merge import concatenate
-    
-    img_in = Input(shape=(120,160,3), name='img_in')
-    imu_in = Input(shape=(num_imu_inputs,), name="imu_in")
-    
-    x = img_in
-    x = Cropping2D(cropping=((60,0), (0,0)))(x) #trim 60 pixels off top
-    #x = Lambda(lambda x: x/127.5 - 1.)(x) # normalize and re-center
-    x = Convolution2D(24, (5,5), strides=(2,2), activation='relu')(x)
-    x = Convolution2D(32, (5,5), strides=(2,2), activation='relu')(x)
-    x = Convolution2D(64, (3,3), strides=(2,2), activation='relu')(x)
-    x = Convolution2D(64, (3,3), strides=(1,1), activation='relu')(x)
-    x = Convolution2D(64, (3,3), strides=(1,1), activation='relu')(x)
-    x = Flatten(name='flattened')(x)
-    x = Dense(100, activation='relu')(x)
-    x = Dropout(.1)(x)
-    
-    y = imu_in
-    y = Dense(14, activation='relu')(y)
-    y = Dense(14, activation='relu')(y)
-    y = Dense(14, activation='relu')(y)
-    
-    z = concatenate([x, y])
-    z = Dense(50, activation='relu')(z)
-    z = Dropout(.1)(z)
-    z = Dense(50, activation='relu')(z)
-    z = Dropout(.1)(z)
-
-    outputs = [] 
-    
-    for i in range(num_outputs):
-        outputs.append(Dense(1, activation='linear', name='out_' + str(i))(z))
-        
-    model = Model(inputs=[img_in, imu_in], outputs=outputs)
-    
-    model.compile(optimizer='adam',
-                  loss='mse')
-    
     return model
